@@ -31,3 +31,5 @@ def service_connection(key, mask):
         recv_data = sock.recv(1024)
         if recv_data:
             print(f"Received {recv_data!r} from connection {data.connid}")
+            data.recv_total += len(recv_data)
+        if not recv_data
