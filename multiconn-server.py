@@ -3,33 +3,6 @@ import socket
 import selectors
 import types
 
-sel = selectors.DefaultSelector()
-
-host, port = sys.argv[1], int(sys.argv[2])
-# this socket is used for listening for new connections
-lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# bind this socket to the host and port 
-lsock.bind((host, port))
-print(f"Listening on {(host, port)}")
-# non-blocking
-lsock.setblocking(False)
-sel.register(lsock, selectors.EVENT_READ, data=None)
-
-try:
-    while True:
-        # ! 'key' is the namedtuple returned from .select() that contains the socket object(key.fileobj) and the data object(key.data)
-        events = sel.select(timeout=None)
-        for key, mask in events:
-            # At the first time, the key.data is not created
-            if key.data is None:
-                accecpt_wrapper(key.fileobj)
-            else:
-                service_connection(key, mask)
-except KeyboardInterrupt:
-    print("Caught keyboard interrupt, exiting")
-finally:
-    sel.close()
-    
 def accept_wrapper(sock):
     conn, addr = sock.accept()
     print(f"Accepted connection from {addr}")
@@ -54,3 +27,32 @@ def service_connection(key, mask):
             print(f"Echoing {data.outb!r} to {data.addr}")
             sent = sock.send(data.outb)
             data.outb = data.outb[sent:]
+
+if __name__ == '__main__':
+    sel = selectors.DefaultSelector()
+
+    host, port = sys.argv[1], int(sys.argv[2])
+    # this socket is used for listening for new connections
+    lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # bind this socket to the host and port 
+    lsock.bind((host, port))
+    lsock.listen()
+    print(f"Listening on {(host, port)}")
+    # non-blocking
+    lsock.setblocking(False)
+    sel.register(lsock, selectors.EVENT_READ, data=None)
+
+    try:
+        while True:
+            # ! 'key' is the namedtuple returned from .select() that contains the socket object(key.fileobj) and the data object(key.data)
+            events = sel.select(timeout=None)
+            for key, mask in events:
+                # lsock differs the conn socks that it don't have data registered in selector
+                if key.data is None:
+                    accept_wrapper(key.fileobj)
+                else:
+                    service_connection(key, mask)
+    except KeyboardInterrupt:
+        print("Caught keyboard interrupt, exiting")
+    finally:
+        sel.close()

@@ -3,10 +3,7 @@ import socket
 import selectors
 import types
 
-sel = selectors.DefaultSelector()
-messages = [b"Message 1 from client.", b"Message 2 from client."]
-
-def start_connections(host, port, num_conns):
+def start_connections(host, port, num_conns, messages):
     server_addr = (host, port)
     for i in range(num_conns):
         connid = i + 1
@@ -19,7 +16,7 @@ def start_connections(host, port, num_conns):
             connid = connid,
             msg_total = sum(len(m) for m in messages),
             recv_total = 0,
-            messages = messages.copy,
+            messages = messages.copy(),
             outb = b""
         )
         sel.register(sock, events, data=data)
@@ -32,4 +29,34 @@ def service_connection(key, mask):
         if recv_data:
             print(f"Received {recv_data!r} from connection {data.connid}")
             data.recv_total += len(recv_data)
-        if not recv_data
+        if not recv_data or data.recv_total == data.msg_total:
+            print(f"Closing connection {data.connid}")
+            sel.unregister(sock)
+            sock.close()
+    if mask & selectors.EVENT_WRITE:
+        if not data.outb and data.messages:
+            data.outb = data.messages.pop(0)
+        if data.outb:
+            print(f"Sending {data.outb!r} to connection {data.connid}")
+            sent = sock.send(data.outb)
+            data.outb = data.outb[sent:]
+            
+if __name__ == '__main__':
+    messages = [b"Message 1 from client.", b"Message 2 from client."]
+    sel = selectors.DefaultSelector()
+    
+    # while True:
+    #     evt = sel.select(timeout=None)
+    
+    host, port, num_conns = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+    start_connections(host=host, port=port, num_conns=num_conns, messages=messages)
+    try:
+        while True:
+            # ! 'key' is the namedtuple returned from .select() that contains the socket object(key.fileobj) and the data object(key.data)
+            events = sel.select(timeout=None)
+            for key, mask in events:
+                service_connection(key, mask)
+    except KeyboardInterrupt:
+        print("Caught keyboard interrupt, exiting")
+    finally:
+        sel.close()
